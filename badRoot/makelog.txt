@@ -1,0 +1,25 @@
+gcc  -iquote include -Wall -Werror -ggdb  \
+	  -M -MG tools/mkfs.c -MF tools/mkfs.d -MT tools/mkfs.d -MT tools/mkfs.o
+gcc -c  -iquote include -Wall -Werror -ggdb  -o tools/mkfs.o tools/mkfs.c
+gcc  tools/mkfs.o -o tools/mkfs
+./tools/mkfs fs.img fs
+used 29 (bit 1 ninode 26) free 29 total 1024
+README
+cat
+echo
+forktest
+grep
+init
+kill
+ln
+ls
+mkdir
+rm
+sh
+stressfs
+tester
+usertests
+wc
+zombie
+balloc: first 421 blocks have been allocated
+balloc: write bitmap block at sector 28
