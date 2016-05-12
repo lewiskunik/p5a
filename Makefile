@@ -9,8 +9,8 @@
 
 # Default make target
 .PHONY: all
-all: xv6.img fs.img checker
-checker: checker.c
+all: xv6.img fs.img fscheck
+fscheck: fscheck.c
 ################################################################################
 # Build options
 ################################################################################
@@ -94,7 +94,7 @@ include tools/makefile.mk
 
 DEPS := $(KERNEL_DEPS) $(USER_DEPS) $(TOOLS_DEPS)
 CLEAN := $(KERNEL_CLEAN) $(USER_CLEAN) $(TOOLS_CLEAN) \
-	fs fs.img .gdbinit .bochsrc dist checker
+	fs fs.img .gdbinit .bochsrc dist fscheck
 
 .PHONY: clean distclean run depend qemu qemu-nox qemu-gdb qemu-nox-gdb bochs
 
