@@ -136,7 +136,7 @@ int check_parent_inum(void *base_addr, int b_addr){
 
 //return 1 on error, 0 if pass
 //check if inode's entry block contents are all good.
-int check_dirents(void *base_addr, int b_addr, int this_inum, int*inodes_referenced, int ninodes){
+int check_dirents(void *base_addr, int b_addr, int this_inum, int*inodes_referenced, int*files_referenced, int*dir_refs, int ninodes){
 
 	struct dirent *dir_content;
 	struct dinode *child_inode;
@@ -154,18 +154,30 @@ int check_dirents(void *base_addr, int b_addr, int this_inum, int*inodes_referen
 			//reproduce the inode which this directory entry refers to
 			//printf("checking directory named %s at inode %d\n", entry_name, inum);
 			
-			//PROBLEM HERE: 
+			 
 			child_inode = (struct dinode*)(base_addr + (2*BSIZE) + (inum*sizeof(struct dinode)));
 			//if this directory entry is another directory, check that directory's ".." inum ref.
 			if(child_inode->type == 1 && (strcmp(entry_name, ".")!=0) && (strcmp(entry_name, "..")!=0)){
+
+				dir_refs[inum] += 1;
+				if(dir_refs[inum] > 1){
+					fprintf(stderr, "ERROR: directory appears more than once in file system.\n");
+					return 1; //for now this is the only check.
+				}
+
 				//printf("child inode type is %d and first addr to check is %d\n", child_inode->type, child_inode->addrs[0]);
 				if(this_inum != check_parent_inum(base_addr,child_inode->addrs[0])){ //assumes parent dir entry is in first block of data				
 					fprintf(stderr, "ERROR: parent directory mismatch.\n");
 					return 1; //for now this is the only check.
 				}
+				
+				
 			}
-		
-									
+
+			//if found a file in the directory data, note the inode that this points to and increment the number of links
+			if(child_inode->type == 2)
+					files_referenced[inum] += 1;
+							
 		}
 
 	}
@@ -174,7 +186,6 @@ int check_dirents(void *base_addr, int b_addr, int this_inum, int*inodes_referen
 	return 0; // means you got through alright
 
 }
-
 				
 
 int
@@ -221,6 +232,21 @@ main(int argc, char *argv[])
 		inode_marked[p] = 0;
 		inode_referenced[p] = 0;
 	}
+
+
+	int inode_nlink[sb->ninodes];
+	int inode_num_refs[sb->ninodes];
+	for(p = 0; p < sb->ninodes; p++){
+		inode_nlink[p] = 0;
+		inode_num_refs[p] = 0;
+	}
+
+	int dir_num_refs[sb->ninodes];
+	for(p = 0; p < sb->ninodes; p++)
+		dir_num_refs[p] = 0;
+	
+
+
 	int block_addr, num;
 	//char *entry_name;
 
@@ -237,6 +263,9 @@ main(int argc, char *argv[])
 		if(type == 0 || type == 1 || type == 2 || type == 3){
 
 			if(DEBUG) printf("%d type: %d\n", i, type);//TODO debug purposes only
+
+			if(type == 2)
+				inode_nlink[i] = dip->nlink;
 
 			if(type != 0){
 				
@@ -263,7 +292,7 @@ main(int argc, char *argv[])
 					
 					//IMPORTANT: Switched the order of these! Allows us to pass another test
 					if(dip->addrs[j] != 0){
-						if((dip->addrs[j]) < 29 || (dip->addrs[j]) > range){//0
+						if((dip->addrs[j]) < ((int)BBLOCK(sb->nblocks, sb->ninodes))+1 || (dip->addrs[j]) > range){//0
 							
 							fprintf(stderr,"ERROR: bad address in inode.\n");
 							return 1;
@@ -295,9 +324,13 @@ main(int argc, char *argv[])
 					
 					//check inode references and also see if parent directories are okay
 					if(type == 1){
-						if(check_dirents(img_ptr, block_addr, i, inode_referenced, sb->ninodes))
+						if(check_dirents(img_ptr, block_addr, i, inode_referenced, inode_num_refs, dir_num_refs, sb->ninodes))
 							return 1;
 					}
+
+					
+							
+					
 
 
 				}
@@ -313,7 +346,7 @@ main(int argc, char *argv[])
 							if(DEBUG)
 								printf("%d ", num);
 							//IMPORTANT: Switched the order of these! Allows us to pass another test
-							if(num < 29 || num > range){//0
+							if(num < ((int)BBLOCK(sb->nblocks, sb->ninodes))+1 || num > range){//0
 
 								fprintf(stderr,"ERROR: bad address in inode.\n");
 								return 1;
@@ -327,7 +360,7 @@ main(int argc, char *argv[])
 							
 							//check inode references and also see if parent directories are okay
 							if(type == 1){
-								if(check_dirents(img_ptr, block_addr, i, inode_referenced, sb->ninodes))
+								if(check_dirents(img_ptr, block_addr, i, inode_referenced, inode_num_refs, dir_num_refs, sb->ninodes))
 									return 1;
 							}
 							
@@ -436,6 +469,21 @@ main(int argc, char *argv[])
 
 		}
 	}
+
+	//int inode_nlink[sb->ninodes];
+	//int inode_num_refs[sb->ninodes];
+	for(i = 0; i < (sb->ninodes); i++){
+		
+		//printf("inode %d nlinks: %d   references found: %d\n", i, inode_nlink[i], inode_num_refs[i]);
+
+		if((inode_nlink[i] != inode_num_refs[i])){
+			fprintf(stderr,"ERROR: bad reference count for file.\n");
+			return 1;
+		}
+			
+		
+	}				
+
 
 	
 	for(i = 0; i < (sb->ninodes); i++){
