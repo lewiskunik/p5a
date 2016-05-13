@@ -4,7 +4,35 @@
 1.0
 number of links = 1
 size = 512
-addresses = 29  0  0  0  0  0  0  0  0  0  0  0  0  
+addresses = 29  checking directory named . at inode 1
+checking directory named .. at inode 1
+checking directory named fulldirect at inode 2
+checking directory named maxfile at inode 3
+checking directory named oneindir at inode 4
+checking directory named onedir at inode 5
+checking directory named emptyfile at inode 6
+checking directory named dir1 at inode 7
+child inode type is 1 and first addr to check is 198
+block address = 198
+entry name = .
+block address = 198
+entry name = ..
+inode referred to is 1
+checking directory named dir2 at inode 10
+child inode type is 1 and first addr to check is 340
+block address = 340
+entry name = .
+block address = 340
+entry name = ..
+inode referred to is 1
+checking directory named bigdir at inode 14
+child inode type is 1 and first addr to check is 368
+block address = 368
+entry name = .
+block address = 368
+entry name = ..
+inode referred to is 1
+0  0  0  0  0  0  0  0  0  0  0  0  
 
 
 2 type: 2
@@ -48,7 +76,11 @@ addresses = 0  0  0  0  0  0  0  0  0  0  0  0  0
 1.0
 number of links = 1
 size = 512
-addresses = 198  0  0  0  0  0  0  0  0  0  0  0  0  
+addresses = 198  checking directory named . at inode 7
+checking directory named .. at inode 1
+checking directory named emptyfile at inode 8
+checking directory named maxfile at inode 9
+0  0  0  0  0  0  0  0  0  0  0  0  
 
 
 8 type: 2
@@ -70,7 +102,12 @@ EXTRA BLOCK
 1.0
 number of links = 1
 size = 512
-addresses = 340  0  0  0  0  0  0  0  0  0  0  0  0  
+addresses = 340  checking directory named . at inode 10
+checking directory named .. at inode 1
+checking directory named fulldirect at inode 11
+checking directory named onedir at inode 12
+checking directory named oneindir at inode 13
+0  0  0  0  0  0  0  0  0  0  0  0  
 
 
 11 type: 2
@@ -99,7 +136,59 @@ EXTRA BLOCK
 2.0
 number of links = 1
 size = 1024
-addresses = 368  369  0  0  0  0  0  0  0  0  0  0  0  
+addresses = 368  checking directory named . at inode 14
+checking directory named .. at inode 1
+checking directory named 0 at inode 15
+checking directory named 1 at inode 16
+checking directory named 2 at inode 17
+checking directory named 3 at inode 18
+checking directory named 4 at inode 19
+checking directory named 5 at inode 20
+checking directory named 6 at inode 21
+checking directory named 7 at inode 22
+checking directory named 8 at inode 23
+checking directory named 9 at inode 24
+checking directory named 10 at inode 25
+checking directory named 11 at inode 26
+checking directory named 12 at inode 27
+checking directory named 13 at inode 28
+checking directory named 14 at inode 29
+checking directory named 15 at inode 30
+checking directory named 16 at inode 31
+checking directory named 17 at inode 32
+checking directory named 18 at inode 33
+checking directory named 19 at inode 34
+checking directory named 20 at inode 35
+checking directory named 21 at inode 36
+checking directory named 22 at inode 37
+checking directory named 23 at inode 38
+checking directory named 24 at inode 39
+checking directory named 25 at inode 40
+checking directory named 26 at inode 41
+checking directory named 27 at inode 42
+checking directory named 28 at inode 43
+checking directory named 29 at inode 44
+369  checking directory named 30 at inode 45
+checking directory named 31 at inode 46
+checking directory named 32 at inode 47
+checking directory named 33 at inode 48
+checking directory named 34 at inode 49
+checking directory named 35 at inode 50
+checking directory named 36 at inode 51
+checking directory named 37 at inode 52
+checking directory named 38 at inode 53
+checking directory named 39 at inode 54
+checking directory named 40 at inode 55
+checking directory named 41 at inode 56
+checking directory named 42 at inode 57
+checking directory named 43 at inode 58
+checking directory named 44 at inode 59
+checking directory named 45 at inode 60
+checking directory named 46 at inode 61
+checking directory named 47 at inode 62
+checking directory named 48 at inode 63
+checking directory named 49 at inode 64
+0  0  0  0  0  0  0  0  0  0  0  
 
 
 15 type: 2
