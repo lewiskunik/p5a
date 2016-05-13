@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <assert.h>
 #include <sys/mman.h>
+#include <string.h>
 #include "include/fs.h"
 //Block 0 = unused
 //Block 1 = super
@@ -12,7 +13,7 @@
 
 #define ROOTINO 1 //root of Inode
 #define BSIZE 512 //block size
-int DEBUG = 0;//used for whether or not to debug
+int DEBUG = 1;//used for whether or not to debug
 /*
 struct superblock{
 	uint size;	//number of blocks in fs
@@ -33,6 +34,141 @@ struct dinode{
 };
 */
 
+
+//check within an inode directory for presence of both "." and ".."
+//return 1 on error, 0 if pass
+int check_curr_parent(void *base_addr, int b_addr){
+	
+	struct dirent *dir_content;
+	char *entry_name;
+	int has_curr, has_parent, i;
+	has_curr = 0;
+	has_parent = 0;
+	for(i = 0; i < (BSIZE/sizeof(struct dirent)); i++){
+		dir_content = (struct dirent *)(base_addr + (b_addr*BSIZE) + i*(sizeof(struct dirent)));
+		if(dir_content->inum != 0){
+			entry_name = dir_content->name;
+			if(has_curr && has_parent)
+				break;
+			if(strcmp(entry_name, ".") == 0){ //this dirent is current
+				has_curr = 1;
+				continue;
+			}
+			if(strcmp(entry_name, "..") == 0){
+				has_parent = 1;
+				continue;						
+			}
+									
+		}
+
+	}
+	if(!(has_curr & has_parent)){
+		fprintf(stderr, "ERROR: directory not properly formatted.\n");
+		return 1;
+	}
+	return 0;
+		
+	
+}
+//return 1 on error, 0 if pass
+//check if root inode's directory entry refers to itself
+int check_root_inum(void *base_addr, int b_addr){
+
+	struct dirent *dir_content;
+	char *entry_name;
+	int i;
+	int curr_good = 0;
+	int parent_good = 0;
+	for(i = 0; i < (BSIZE/sizeof(struct dirent)); i++){
+		dir_content = (struct dirent *)(base_addr + (b_addr*BSIZE) + i*(sizeof(struct dirent)));
+		if(dir_content->inum != 0){
+			entry_name = dir_content->name;
+			if(curr_good && parent_good)
+				break;
+			if(strcmp(entry_name, ".") == 0){ //this dirent is current
+				if(dir_content->inum == ROOTINO)
+					curr_good = 1;
+				continue;
+			}
+			if(strcmp(entry_name, "..") == 0){
+				if(dir_content->inum == ROOTINO)
+					parent_good = 1;
+				continue;						
+			}
+									
+		}
+
+	}
+	
+	if(!(curr_good && parent_good)){	
+		fprintf(stderr, "ERROR: root directory does not exist.\n");
+		return 1;
+	}
+	return 0;
+
+}
+
+//return parent inum
+//check if root inode's directory entry refers to itself
+int check_parent_inum(void *base_addr, int b_addr){
+
+	struct dirent *dir_content;
+	char *entry_name;
+	int i;
+	for(i = 0; i < (BSIZE/sizeof(struct dirent)); i++){
+		dir_content = (struct dirent *)(base_addr + (b_addr*BSIZE) + i*(sizeof(struct dirent)));
+		if(dir_content->inum != 0){
+			entry_name = dir_content->name;
+			
+			if(strcmp(entry_name, "..") == 0){
+				return dir_content->inum;
+											
+			}
+									
+		}
+
+	}
+	return 0; //this would be an error
+
+}
+
+//return 1 on error, 0 if pass
+//check if inode's entry block contents are all good.
+int check_dirents(void *base_addr, int b_addr, int this_inum, int*inodes_referenced){
+
+	struct dirent *dir_content;
+	struct dinode *child_inode;
+	char *entry_name;
+	int i, inum;
+	//loop through block data of directory contents
+	for(i = 0; i < (BSIZE/sizeof(struct dirent)); i++){
+		dir_content = (struct dirent *)(base_addr + (b_addr*BSIZE) + i*(sizeof(struct dirent)));
+		inum = dir_content->inum;
+		if(inum != 0){
+			//note that an inode is referenced within a directory
+			inodes_referenced[inum] = 1;
+			entry_name = dir_content->name;
+			//reproduce the inode which this directory entry refers to
+			child_inode = (struct dinode*)(base_addr + ((inum)*BSIZE));
+			//if this directory entry is another directory, check that directory's ".." inum ref.
+			if(child_inode->type == 1){
+				if(inum != check_parent_inum(base_addr,child_inode->addrs[0])){ //assumes parent dir entry is in first block of data
+					fprintf(stderr, "ERROR: parent directory mismatch.\n");
+					return 1; //for now this is the only check.
+				}
+			}
+			
+									
+		}
+
+	}
+	
+	
+	return 0; // means you got through alright
+
+}
+
+				
 
 int
 main(int argc, char *argv[])
@@ -55,22 +191,31 @@ main(int argc, char *argv[])
 
 	struct superblock *sb;
 	sb = (struct superblock *)(img_ptr + BSIZE);
-	if(DEBUG)
-		printf("%d %d %d\n", sb->size, sb->nblocks, sb->ninodes);//TODO debug purposes only
+	if(DEBUG) printf("%d %d %d\n", sb->size, sb->nblocks, sb->ninodes);//TODO debug purposes only
 
-
-	//int range = (int)((sb->size) * BSIZE);//should be the max value of valid addresses
+	int range = (int)((sb->size) * BSIZE);//should be the max value of valid addresses
 	//printf("%d\n", range);
 
 	//inodes
-	int i;
+	int i, p;
 	struct dinode *dip = (struct dinode*)(img_ptr + (2*BSIZE));
 
-
+	
+	
 
 	int bitmap[sb->nblocks];
 	int inode_used[sb->nblocks];
+	int inode_marked[sb->ninodes];
+	int inode_referenced[sb->ninodes];
+	for(p = 0; p < sb->nblocks; p++){
+		inode_used[p] = 0;
+	}
+	for(p = 0; p < sb->ninodes; p++){
+		inode_marked[p] = 0;
+		inode_referenced[p] = 0;
+	}
 	int block_addr, num;
+	//char *entry_name;
 
 	for(i = 0; i <= BBLOCK(sb->nblocks, sb->ninodes); i++)
 		inode_used[i] = 1; 
@@ -83,48 +228,98 @@ main(int argc, char *argv[])
 		//			T_DEV (special device) = 3
 		//note: 0 => unallocated
 		if(type == 0 || type == 1 || type == 2 || type == 3){
-			if(DEBUG)
-				printf("%d type: %d\n", i, type);//TODO debug purposes only
+
+			if(DEBUG) printf("%d type: %d\n", i, type);//TODO debug purposes only
+
 			if(type != 0){
 				
-				inode_used[IBLOCK(i)] = 1;
+				inode_marked[i] = 1;
 				int dev = (dip->size)/BSIZE;
 				int mod = (dip->size)%BSIZE;
-				if(DEBUG)
-					printf("%d.%d\n", dev, mod);//can use this to get the total number of blocks in use
-				if(DEBUG)
-					printf("number of links = %d\nsize = %d\naddresses = ", dip->nlink, dip->size);
+
+				if(mod > 0){
+					dev++;//total number of blocks in use
+				}
+				if(dev > 12){
+					dev++;//acount for indirect block
+				}
+
+				if(DEBUG) printf("%d.%d\n", dev, mod);//can use this to get the total number of blocks in use
+				if(DEBUG) printf("number of links = %d\nsize = %d\naddresses = ", dip->nlink, dip->size);
 				
 				int j;
 				for(j = 0; j < (NDIRECT+1); j++){
 					block_addr = dip->addrs[j];
+					
+					if(DEBUG) printf("%d  ", dip->addrs[j]);
+					
+					
+					//IMPORTANT: Switched the order of these! Allows us to pass another test
+					if(dip->addrs[j] != 0){
+						if((dip->addrs[j]) < 29 || (dip->addrs[j]) > range){//0
+							
+							fprintf(stderr,"ERROR: bad address in inode.\n");
+							return 1;
+						}
+					}
+	
 					if(block_addr != 0){
 						if(inode_used[block_addr] == 1){
 							fprintf(stderr, "ERROR: address used more than once.\n"); //test
 							return 1;
 						}
-						inode_used[block_addr] = 1;
+						
 					}
-					if(DEBUG)
-						printf("%d  ", dip->addrs[j]);
+					
+					inode_used[block_addr] = 1;
+					
+					
+					
+					//CHECK FOR CURRENT AND PARENT
+					if(type == 1 && block_addr > 1 && j == 0){ //if directory
+						if(check_curr_parent(img_ptr, block_addr))
+							return 1;
+					}
+					
+					if(i == 1 && j == 0){
+						if(check_root_inum(img_ptr, block_addr))
+							return 1;
+					}
+					
+					//check inode references and also see if parent directories are okay
+					//if(check_dirents(img_ptr, block_addr, i, inode_referenced))
+						//return 1;
+
+
 				}
-				if(DEBUG)
-					printf("\n");
+				if(DEBUG) printf("\n");
+
 				if(dev > NDIRECT){
-					if(DEBUG)
-						printf("EXTRA BLOCK\n");					
+					if(DEBUG) printf("EXTRA BLOCK\n");					
 					
 					int *start_addr = (int*)(img_ptr + (block_addr*BSIZE));
 					for(j = 0; j < BSIZE/4; j++){
 						num = *(start_addr + j);
 						if(num != 0){
+							if(DEBUG)
+								printf("%d ", num);
+							//IMPORTANT: Switched the order of these! Allows us to pass another test
+							if(num < 29 || num > range){//0
+
+								fprintf(stderr,"ERROR: bad address in inode.\n");
+								return 1;
+							}
+			
 							if(inode_used[num] == 1){
 								fprintf(stderr, "ERROR: address used more than once.\n");
 								return 1;
 							}
 							inode_used[num] = 1;
-							if(DEBUG)
-								printf("%d ", num);
+							
+							//check inode references and also see if parent directories are okay
+							//if(check_dirents(img_ptr, block_addr, i, inode_referenced))
+								//return 1;
+							
 						}
 					}
 
@@ -144,6 +339,7 @@ main(int argc, char *argv[])
 			fprintf(stderr,"ERROR: root directory does not exist.\n");
 			return 1;
 		}
+		
 		
 	}
 
@@ -177,7 +373,7 @@ main(int argc, char *argv[])
 	//dis the way I do the bitmap thing! You can replace it if you want, dylan.
 	for(i = 0; i < ((sb->nblocks)/32+1); i++){
 		word = *(dbmp_addr+i);
-		if(i <31){
+		if(i < ((sb->nblocks)/32)){
 			for(j = 0; j < 32; j++){
 				n_block = (i*32)+(j);
 				if(DEBUG)
@@ -194,10 +390,11 @@ main(int argc, char *argv[])
 				if(DEBUG) 
 					printf("data bitmap: %x\n", bit);
 		
-				if(bit == 1){
+				if(bit == 1)
 					bitmap[n_block] = 1;
-
-				}
+				else
+					bitmap[n_block] = 0;
+				
 			
 			}
 		}
@@ -219,30 +416,46 @@ main(int argc, char *argv[])
 				if(DEBUG)
 					printf("data bitmap: %x\n", bit);
 		
-				if(bit == 1){
+				if(bit == 1)
 					bitmap[n_block] = 1;
-
-				}
+				else
+					bitmap[n_block] = 0;
 			
 			}
 
 		}
 	}
+
 	/*
+	for(i = 0; i < (sb->ninodes); i++){
+		
+		if((inode_marked[i] == 1) & (inode_referenced[i] == 0)){
+			fprintf(stderr,"ERROR: inode marked use but not found in a directory.\n");
+			return 1;
+		}
+		if((inode_marked[i] == 0) & (inode_referenced[i] == 1)){
+			fprintf(stderr,"ERROR: inode referred to in directory but marked free.\n");
+			return 1;
+		}
+			
+		
+	}*/				
+
+	
 	for(i = 0; i < (sb->nblocks); i++){
 		
 		if((bitmap[i] == 0) & (inode_used[i] == 1)){
-			fprintf(stderr,"address used by inode but marked free in bitmap.\n");
+			fprintf(stderr,"ERROR: address used by inode but marked free in bitmap.\n");
 			return 1;
 		}
 		if((bitmap[i] == 1) & (inode_used[i] == 0)){
-			fprintf(stderr,"bitmap marks block in use but it is not in use.\n");
+			fprintf(stderr,"ERROR: bitmap marks block in use but it is not in use.\n");
 			return 1;
 		}
 			
 		
 	}
-	*/	
+		
 
 	//bitmap
 
